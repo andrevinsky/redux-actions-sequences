@@ -234,7 +234,6 @@ export const fireOnSequence = (action, sequence, {
 
         const result = sequence(a);
     if (result === symNext) {
-      debugger;
 
       if (once) {
         unregister();
