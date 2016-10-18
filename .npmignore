@@ -2,3 +2,9 @@
 src/
 flow-typed/
 npm-debug.log
+.idea/
+.babelrc
+.flowconfig
+.npmignore
+memo.md
+yarn.lock
