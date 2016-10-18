@@ -7,3 +7,4 @@ node_modules
 lib
 memo.md
 flow-typed
+npm-debug.log

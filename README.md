@@ -77,22 +77,22 @@ export const sequence1 = dispatchActionWhen(actionOne, S =>
   ]), { once: true });
 
 // previous example is equivalent to this:
-export const sequence2 = dispatchActionWhen(actionOne, SEQ =>
-  SEQ.SEQUENCE([
+export const sequence2 = dispatchActionWhen(actionOne, S =>
+  S.QUEUE([
     appLoading,
-    SEQ.TIMES(appLoadingPulse, 7)
+    S.TIMES(appLoadingPulse, 7)
   ]), { once: true });
 
-export const sequence3 = dispatchActionWhen(actionTwo, SEQ => 
-  SEQ.ALL([
+export const sequence3 = dispatchActionWhen(actionTwo, S => 
+  S.ALL([
     appLoading,
-    SEQ.TIMES(appLoadingPulse, 7),
+    S.TIMES(appLoadingPulse, 7),
     fetchSets
   ]), { once: true });
 
 // will execute until unregister() in thunked action is called
-export const sequence4 = dispatchActionWhen(actionThree, SEQ => 
-  SEQ.ANY([
+export const sequence4 = dispatchActionWhen(actionThree, S => 
+  S.ANY([
     fetchSets,
     appLoaded
   ]));
