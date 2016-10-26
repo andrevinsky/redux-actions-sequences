@@ -5,7 +5,7 @@
   "main": "lib/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "compile": "babel ./src/index.js -o ./lib/index.js",
+    "compile": "babel src --out-dir lib",
     "prepublish": "npm run compile",
     "preversion": "npm run compile",
     "flow": "flow; test $? -eq 0 -o $? -eq 2",
