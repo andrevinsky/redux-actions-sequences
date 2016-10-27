@@ -15,6 +15,7 @@ import check from './type';
 const localNS : Symbol = Symbol('SEQ');
 const symNext : Symbol = Symbol('next');
 const symRestart : Symbol = Symbol('restart');
+const symRequired : Symbol = Symbol('required');
 
 type tokenType = string | { toString : () => string } | { type: string } | RunnableSequenceFnType;
 type tokenListType = Array<tokenType>;
@@ -55,7 +56,9 @@ type sequenceMakingApiType = {
   /**
    * @deprecated
    */
-  SEQUENCE_STRICT: multiStrictSequenceMakerType
+  SEQUENCE_STRICT: multiStrictSequenceMakerType,
+
+  REQUIRED: Symbol
 };
 
 type sequenceBuilderCallbackType = (x: sequenceMakingApiType) => RunnableSequenceFnType;
@@ -90,6 +93,9 @@ function compare(template: any, obj: any) : boolean {
       return m && compare(template[key], obj[key]);
     }, true);
   } else {
+    if (template === symRequired) {
+      return !check.isUndefined(obj);
+    }
     return template === obj;
   }
 }
@@ -128,6 +134,12 @@ const singleSequenceCreator : singleSequenceMakerType = (token, { exact } : sing
   return tagResultFunction(result, tokenDescription);
 };
 
+const singleExactSequenceCreator : singleExactSequenceMakerType = (token: tokenType) : internalTokenType => {
+  invariant(token && check.isObject(token), 'Token of plain object type expected for <EXACT>');
+
+  return exactObjectSequenceCreator(token);
+};
+
 const exactObjectSequenceCreator : singleExactSequenceMakerType = (token) : internalTokenType => {
   const result = a => (a !== symRestart) && ( compare(token, a) ? symNext : false);
   const tokenDescription = '<SINGLE>:(' + JSON.stringify(token) + ')';
@@ -138,7 +150,6 @@ const timesSequenceCreator : timesSequenceMakerType = (token, times, { strict } 
   invariant(token, 'Token expected for <TIMES>');
 
   const normalizedToken = singleSequenceCreator(token);
-
   const tokenDescription = '<TIMES>:(' + normalizedToken.toString() + ' x ' + times + ')';
 
   let count = 0;
@@ -298,6 +309,7 @@ const queueStrictSequenceCreator : multiStrictSequenceMakerType = (tokens) : int
 const sequenceApi : sequenceMakingApiType = {
 
   SINGLE: singleSequenceCreator,
+  EXACT: singleExactSequenceCreator,
   TIMES: timesSequenceCreator,
   TIMES_STRICT: timesStrictSequenceCreator,
   ALL: allSequenceCreator,
@@ -311,7 +323,9 @@ const sequenceApi : sequenceMakingApiType = {
    * @deprecated
    */
   SEQUENCE_STRICT: queueStrictSequenceCreator,
-  QUEUE_STRICT: queueStrictSequenceCreator
+  QUEUE_STRICT: queueStrictSequenceCreator,
+
+  REQUIRED: symRequired
 };
 
 /**
