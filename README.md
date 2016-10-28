@@ -2,7 +2,12 @@
 
 [![NPM](https://nodei.co/npm/redux-actions-sequences.png?downloads=true&stars=true)](https://nodei.co/npm/redux-actions-sequences/)
 
-`redux-actions-sequences` is a library that that makes defined sequences of redux actions trigger a new action. Sequence can be comprised of a single action (`SINGLE`, `EXACT`), a series of the same action repeated n times (`TIMES`), an order-dependent series of actions (`QUEUE`), order-indenendent (`ALL`), at just one of the given list (`ANY`), or their superposition.
+`redux-actions-sequences` is a library that that makes defined sequences of redux actions trigger a new action. Sequence can be comprised of a single action (`SINGLE`, `EXACT`), a series of the same action repeated n times (`TIMES`), an order-dependent series of actions (`QUEUE`), order-indenendent (`ALL`), just one of the given list (`ANY`), or their superposition. 
+
+Elemental block of the sequence description is an instance of a FSA-compliant action, an action creator function created by `redux-actions`, a string that represents the type of an action, or an exact object-based description of the action (if used with `EXACT`; four wildcard values are provided for this case: `PRESENT`/ `MISSING`, `TRUTHY`/`FALSEY` to better describe an expected action's properties). Or just another sequence. Which means, sequence definitions can be nested.
+
+Sequences are built using a helper object (called `S` in examples) lent in a callback inside a `dispatchActionWhen` call. See examples below.
+
 
 ## Installation
 
