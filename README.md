@@ -1,4 +1,7 @@
 # redux-actions-sequences
+
+[![NPM](https://nodei.co/npm/redux-actions-sequences.png?downloads=true&stars=true)](https://nodei.co/npm/redux-actions-sequences/)
+
 Make sequences of redux actions trigger a new action
 
 ## Installation
@@ -17,7 +20,7 @@ $ yarn add redux-actions-sequences
 
 ### Register default export as a middleware:
 
-```javascript
+```js
 
 // Imports:
 import sequential from 'redux-actions-sequences';
@@ -37,7 +40,7 @@ const store = createStoreWithMiddleware(reducer, initialState);
 ### Create action sequences with these shorthands:
 
 
-```javascript
+```js
 
 // Imports:
 
@@ -69,6 +72,8 @@ const actionFour = (unregister) => (dispatch, getState) => {
     dispatch(actionThree());
   }
 };
+
+const actionFive = createAction('ACTION_FIVE');
 
 
 // Create sequences: 
@@ -116,6 +121,15 @@ export const sequence4 = dispatchActionWhen(actionFour, S =>
     fetchSets,
     appLoaded
   ]));
+  
+export const sequence5 = dispatchActionWhen(actionFive, S => 
+  S.EXACT({
+    type: 'DATA_FETCH',
+    payload: S.PRESENT,
+    error: S.FALSEY,
+    meta: S.MISSING
+  })
+);
 
 // Start using them by wrapping in a dispatch() call:
 // Elsewhere:
@@ -130,15 +144,33 @@ dispatch(sequence4); // will eventually dispatch thunked actionFour
 
 ```
 
-### Participate
-
-Your input to this library is welcome. Please participate.
-
-
 ### Dependencies:
 
 Works along with these packages:
 
 * "redux": "^3.6.0",
-* "redux-actions": "^0.12.0",
 * "redux-thunk": "^2.1.0"
+* "redux-actions": "^0.12.0",
+
+
+## See also
+
+- [redux-actions](https://github.com/acdlite/redux-actions) - FSA-compliant action creators
+- [redux-promise](https://github.com/acdlite/redux-promise) - Promise middleware
+
+## Contributing
+
+Please use the [issues page](https://github.com/AndrewRevinsky/redux-actions-sequences/issues) to report a bug or request a feature.
+
+
+## Stay in Touch
+
+* [Twitter](https://twitter.com/andrevinsky)
+
+## License
+
+[MIT](LICENSE)
+
+## Author
+
+Andrew Revinsky

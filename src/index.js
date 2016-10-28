@@ -16,6 +16,9 @@ const localNS : Symbol = Symbol('SEQ');
 const symNext : Symbol = Symbol('next');
 const symRestart : Symbol = Symbol('restart');
 const symRequired : Symbol = Symbol('required');
+const symEmpty : Symbol = Symbol('empty');
+const symTruthy : Symbol = Symbol('truthy');
+const symFalsey : Symbol = Symbol('falsey');
 
 type tokenType = string | { toString : () => string } | { type: string } | RunnableSequenceFnType;
 type tokenListType = Array<tokenType>;
@@ -58,7 +61,10 @@ type sequenceMakingApiType = {
    */
   SEQUENCE_STRICT: multiStrictSequenceMakerType,
 
-  REQUIRED: Symbol
+  PRESENT: Symbol,
+  MISSING: Symbol,
+  TRUTHY: Symbol,
+  FALSEY: Symbol
 };
 
 type sequenceBuilderCallbackType = (x: sequenceMakingApiType) => RunnableSequenceFnType;
@@ -93,10 +99,18 @@ function compare(template: any, obj: any) : boolean {
       return m && compare(template[key], obj[key]);
     }, true);
   } else {
-    if (template === symRequired) {
-      return !check.isUndefined(obj);
+    switch (template) {
+      case symEmpty:
+        return check.isUndefined(obj);
+      case symRequired:
+        return !check.isUndefined(obj);
+      case symTruthy:
+        return !!obj;
+      case symFalsey:
+        return !obj;
+      default:
+        return template === obj;
     }
-    return template === obj;
   }
 }
 
@@ -325,7 +339,10 @@ const sequenceApi : sequenceMakingApiType = {
   SEQUENCE_STRICT: queueStrictSequenceCreator,
   QUEUE_STRICT: queueStrictSequenceCreator,
 
-  REQUIRED: symRequired
+  PRESENT: symRequired,
+  MISSING: symEmpty,
+  TRUTHY: symTruthy,
+  FALSEY: symFalsey
 };
 
 /**
