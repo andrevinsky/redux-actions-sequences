@@ -2,7 +2,7 @@
 
 [![NPM](https://nodei.co/npm/redux-actions-sequences.png?downloads=true&stars=true)](https://nodei.co/npm/redux-actions-sequences/)
 
-Make sequences of redux actions trigger a new action
+`redux-actions-sequences` is a library that that makes defined sequences of redux actions trigger a new action
 
 ## Installation
 
