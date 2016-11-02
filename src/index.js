@@ -366,9 +366,20 @@ const registerSequence = (fn) => {
   }
 };
 
-export const dispatchActionWhen = (action : FSAOrFSACreatorType, sequenceBuilderCb : sequenceBuilderCallbackType, { once } : dispatchedOptionsType) : thunkedAction => {
+export const dispatchActionWhen = (action : FSAOrFSACreatorType, sequenceBuilderCb : sequenceBuilderCallbackType, { once } : dispatchedOptionsType = {}) : thunkedAction => {
   return dispatch => {
-    const sequence = sequenceBuilderCb(sequenceApi);
+    const sequenceRaw = sequenceBuilderCb(sequenceApi);
+    let sequence = null;
+    if (check.isArray(sequenceRaw)) {
+      sequence = queueSequenceCreator(sequenceRaw);
+      once = true;
+    } else if (check.isObject(sequenceRaw)) {
+      sequence = singleSequenceCreator(sequenceRaw);
+      once = true;
+    } else {
+      sequence = singleSequenceCreator(sequenceRaw);
+    }
+
     invariant(sequence && check.isFunction(sequence), 'dispatchWhen expects sequenceBuilderCb to return compiled sequence (function)');
 
     const seqKey = ('Sequence: ' + sequence.toString() + ' => ' + ((action.type : string) || action.toString()));

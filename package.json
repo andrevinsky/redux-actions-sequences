@@ -4,8 +4,9 @@
   "description": "Make sequences of actions trigger a new action",
   "main": "lib/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "compile": "babel src --out-dir lib",
+    "test": "mocha --compilers js:babel-register src/**/*-test.js",
+    "test:watch": "npm run test -- --watch src/**/*-test.js",
+    "compile": "babel src --out-dir lib --ignore *-test.js",
     "prepublish": "npm run compile",
     "preversion": "npm run compile",
     "flow": "flow; test $? -eq 0 -o $? -eq 2",
@@ -17,11 +18,16 @@
   },
   "keywords": [
     "redux",
+    "fsa",
     "actions",
     "sequences"
   ],
-  "author": "AndrewRevinsky",
-  "license": "ISC",
+  "author": "Andrew Revinsky <arevinsky@gmail.com>",
+  "bugs": {
+    "url": "https://github.com/AndrewRevinsky/redux-actions-sequences/issues"
+  },
+  "homepage": "https://github.com/AndrewRevinsky/redux-actions-sequences",
+  "license": "MIT",
   "dependencies": {
     "flux-standard-action": "^0.6.1",
     "invariant": "^2.2.1"
@@ -31,6 +37,12 @@
     "babel-core": "^6.17.0",
     "babel-plugin-transform-flow-strip-types": "^6.14.0",
     "babel-preset-es2015": "^6.16.0",
-    "flow-bin": "^0.33.0"
+    "chai": "^3.5.0",
+    "flow-bin": "^0.33.0",
+    "mocha": "^3.1.2",
+    "redux": "^3.6.0",
+    "redux-actions": "^0.13.0",
+    "redux-mock-store": "^1.2.1",
+    "redux-thunk": "^2.1.0"
   }
 }
