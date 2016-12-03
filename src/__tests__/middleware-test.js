@@ -6,7 +6,7 @@ import configureMockStore from 'redux-mock-store';
 import thunk from 'redux-thunk';
 import { createAction } from 'redux-actions';
 
-import middlewareToTest, { dispatchActionWhen } from '../index';
+import middlewareToTest, { dispatchActionWhen, clearAll } from '../index';
 
 const middlewares = [ thunk, middlewareToTest ];
 const mockStore = configureMockStore(middlewares);
@@ -31,15 +31,22 @@ describe('redux-actions-sequences:', () => {
 
     const action = { type: 'action' };
 
+    const resources = [
+      'Ad-hoc, plain object',
+      'Result of built-in <SINGLE> sequence builder',
+      'Array of ad-hoc, plain objects',
+      'Result of two nested operations: built-in <QUERY> and <SINGLE> sequence builders'
+    ];
+
     [
       S => action,
-      S => [ action ],
       S => S.SINGLE(action),
+      S => [ action ],
       S => S.QUEUE([ S.SINGLE(action) ])
 
     ].forEach((sequenceDescription, idx) => {
 
-      it('Definition #' + (idx + 1), () => {
+      it('Definition: ' + resources[idx], () => {
 
         const reaction = { type: 'sequence_met' };
         const sequence = dispatchActionWhen(reaction, sequenceDescription);
@@ -78,13 +85,19 @@ describe('redux-actions-sequences:', () => {
 
     const action = { type: 'action' };
 
+    const resources = [
+      'A string with the expected action type',
+      'A FSA-compliant plain object',
+      'A `redux-actions`-created action creator, which can be `toString()`-ed to type'
+    ];
+
     [
       () => 'action',
       () => ({ type: 'action' }),
       () => createAction('action')
 
     ].forEach((actionDefinition, idx) => {
-      it('Definition #' + (idx + 1), () => {
+      it('Definition: ' + resources[idx], () => {
 
         const reaction = {type: 'sequence_met'};
         const sequence = dispatchActionWhen(reaction, S => actionDefinition());
@@ -93,8 +106,7 @@ describe('redux-actions-sequences:', () => {
         const store = mockStore({});
         store.dispatch(action); // 1
 
-        actions = store.getActions();
-        expect(actions).to.deep.equal([
+        expect(store.getActions()).to.deep.equal([
           {type: 'action'}
         ]);
 
@@ -118,6 +130,69 @@ describe('redux-actions-sequences:', () => {
 
     });
 
+  });
+
+  describe('Repetitions', () => {
+    const action = { type: 'action' };
+    const reaction = { type: 'sequence_met' };
+
+    [
+      {
+        description: 'Repeated',
+        sequence: dispatchActionWhen(reaction, S =>
+          S.SINGLE(action)
+        ),
+        steps: [
+          {
+            fire: action,
+            expecting: [ action, reaction ]
+          },
+          {
+            fire: action,
+            expecting: [ action, reaction, action, reaction ]
+          }
+        ]
+      },
+      {
+        description: 'Once',
+        sequence: dispatchActionWhen(reaction, (S =>
+          S.SINGLE(action)),
+          { once: true }
+        ),
+        steps: [
+          {
+            fire: action,
+            expecting: [ action, reaction ]
+          },
+          {
+            fire: action,
+            expecting: [ action, reaction, action ]
+          }
+        ]
+      }
+    ].forEach(({ description, sequence, steps }) => {
+      it('Sequence: ' + description, () => {
+
+        const store = mockStore({});
+        const actions = () => store.getActions();
+
+        store.dispatch(action); // 1
+        expect(actions()).to.deep.equal([
+          { type: 'action' }
+        ]);
+
+        store.clearActions();
+
+        store.dispatch(sequence); // 2
+        expect(actions()).to.deep.equal([]);
+
+        steps.forEach(({ fire, expecting }) => {
+          store.dispatch(fire); // 3
+          expect(actions()).to.deep.equal(expecting);
+        });
+
+      })
+    });
   });
 
 });

@@ -12,66 +12,84 @@ import invariant from 'invariant';
 
 import check from './type';
 
-const localNS : Symbol = Symbol('SEQ');
-const symNext : Symbol = Symbol('next');
-const symRestart : Symbol = Symbol('restart');
-const symRequired : Symbol = Symbol('required');
-const symEmpty : Symbol = Symbol('empty');
-const symTruthy : Symbol = Symbol('truthy');
-const symFalsey : Symbol = Symbol('falsey');
+const symTag = Symbol('SEQ');
+const symRegistryId = Symbol('registry');
+const symOnce = Symbol('once');
 
-type tokenType = string | { toString : () => string } | { type: string } | RunnableSequenceFnType;
-type tokenListType = Array<tokenType>;
-type internalTokenType = RunnableSequenceFnType;
-type internalTokenListType = Array<internalTokenType>;
-type optionsType = { strict? : boolean };
-type singleOptionsType = { exact? : boolean } ;
+const symNext  = Symbol('next');
+const symRestart = Symbol('restart');
 
-type deprecatedSequenceInputType = tokenType | tokenListType;
+const symRequired = Symbol('required');
+const symEmpty = Symbol('empty');
+const symTruthy = Symbol('truthy');
+const symFalsey = Symbol('falsey');
 
-type dispatchedOptionsType = { once? : boolean }
+const registry = {};
+let sequences = [];
 
-type SequenceRunResultType = boolean | Symbol;
-type FSALightType = Symbol | string | { type: string };
-type FSAOrFSACreatorType = FSALightType | ({ (...rest: Array<void>) : FSALightType });
+function register(fn, action) {
+  const id = Math.random().toString().substr(2);
+  fn[symRegistryId] = id;
 
-type RunnableSequenceFnType = {(action : FSAOrFSACreatorType) : SequenceRunResultType; toString: (x: void) => string; tag: Symbol};
+  sequences.push(fn);
 
-type singleSequenceMakerType = (token : tokenType) => RunnableSequenceFnType;
-type singleExactSequenceMakerType = (token : Object) => RunnableSequenceFnType;
-type timesSequenceMakerType = (token : tokenType, times: number, opts? : optionsType) => RunnableSequenceFnType;
-type timesStrictSequenceMakerType = (token : tokenType, times: number) => RunnableSequenceFnType;
-type multiSequenceMakerType = (tokens : tokenListType, opts? : optionsType) => RunnableSequenceFnType;
-type multiStrictSequenceMakerType = (tokens : tokenListType) => RunnableSequenceFnType;
+  registry[id] = {
+    unregister: () => {
+      const idx = sequences.indexOf(fn);
+      if (idx >= 0) {
+        return sequences.splice(idx, 1);
+      }
+      delete registry[id];
+    },
+    action
+  };
 
-type sequenceMakingApiType = {
-  SINGLE: singleSequenceMakerType,
-  TIMES: timesSequenceMakerType,
-  TIMES_STRICT: timesStrictSequenceMakerType,
-  ALL: multiSequenceMakerType,
-  ANY: multiSequenceMakerType,
-  QUEUE: multiSequenceMakerType,
-  QUEUE_STRICT: multiStrictSequenceMakerType,
-  /**
-   * @deprecated
-   */
-  SEQUENCE: multiSequenceMakerType,
-  /**
-   * @deprecated
-   */
-  SEQUENCE_STRICT: multiStrictSequenceMakerType,
+  return fn;
+}
 
-  PRESENT: Symbol,
-  MISSING: Symbol,
-  TRUTHY: Symbol,
-  FALSEY: Symbol
-};
+function unregister(fn) {
+  const registryId = fn[symRegistryId];
+  if (registryId) {
+    if (registry[registryId]) {
+      registry[registryId].unregister();
+    } else {
+      delete registry[registryId];
+    }
+    delete fn[symRegistryId];
+  }
+  return fn;
+}
 
-type sequenceBuilderCallbackType = (x: sequenceMakingApiType) => RunnableSequenceFnType;
+function getAction(fn) {
+  const registryId = fn[symRegistryId];
+  if (registryId) {
+    if (registry[registryId]) {
+      return registry[registryId].action;
+    }
+  }
+}
 
-type middlewareType = (store : any) => ((next : any) => ((action : any ) => any));
-
-type thunkedAction = (dispatch : Function, getState? : Function) => any;
+function isTagged(input) {
+  return !!input[symTag];
+}
+function tag(input, description) {
+  if (check.isUndefined(description)) {
+    return input[symTag];
+  } else {
+    input[symTag] = description;
+    return input;
+  }
+}
+function tokenToString() {
+  return this[symTag];
+}
+function isOnce(fn) {
+  return fn[symOnce];
+}
+function setOnce(fn) {
+  fn[symOnce] = true;
+  return fn;
+}
 
 /**
  * Internal utility function that wraps result function
@@ -80,20 +98,22 @@ type thunkedAction = (dispatch : Function, getState? : Function) => any;
  * @param replacement
  * @returns {*}
  */
-function tagResultFunction(fn, tokenDescription: string, replacement? : string) : internalTokenType {
-  fn.tag = localNS;
-  if (replacement) {
-    tokenDescription = fn.toString().replace(tokenDescription, replacement)
+function tagResultFunction(fn, tokenDescription, replacement) {
+  const description = tag(fn);
+  if (description) {
+    tag(fn, description.replace(tokenDescription, replacement));
+  } else {
+    tag(fn, tokenDescription);
   }
-  fn.toString = () => tokenDescription;
+  fn.toString = tokenToString;
   return fn;
 }
 
-function restart(tokens : internalTokenListType) : void {
+function restart(tokens)  {
   tokens.forEach(t => t(symRestart));
 }
 
-function compare(template: any, obj: any) : boolean {
+function compare(template, obj) {
   if (check.isObject(template) && check.isObject(obj)) {
     return Object.keys(template).reduce((m, key) => {
       return m && compare(template[key], obj[key]);
@@ -114,10 +134,14 @@ function compare(template: any, obj: any) : boolean {
   }
 }
 
-const singleSequenceCreator : singleSequenceMakerType = (token, { exact } : singleOptionsType = {} ) : internalTokenType => {
+const single = (token) => {
   invariant(token, 'Token expected for <SINGLE>');
 
   let tokenStr = null;
+
+  if (check.isArray(token)) {
+    return queue(token);
+  }
 
   switch (typeof token) {
     case 'string':
@@ -125,45 +149,56 @@ const singleSequenceCreator : singleSequenceMakerType = (token, { exact } : sing
       break;
 
     case 'function':
-      if ((token.tag === localNS)) {
+      if (isTagged(token)) {
         return token;
       }
       tokenStr = token.toString();
       break;
 
     case 'object': {
-        if (exact) {
-          return exactObjectSequenceCreator(token);
-        } else if (check.isString(token.type)) {
-          tokenStr = token.type;
-        }
+      if (check.isString(token.type) && (Object.keys(token).length == 1)) {
+        tokenStr = token.type;
+      } else {
+        return exact(token);
       }
       break;
+    }
   }
 
   invariant(tokenStr, 'Token invalid type for <SINGLE>');
 
-  const result = a => (a !== symRestart) && ( (a.type == tokenStr) ? symNext : false);
-  const tokenDescription = '<SINGLE>:(' + tokenStr + ')';
-  return tagResultFunction(result, tokenDescription);
+  return tagResultFunction(
+    a => (a !== symRestart) && ( (a.type == tokenStr) ? symNext : false),
+    '<SINGLE>:(' + tokenStr + ')'
+  );
 };
 
-const singleExactSequenceCreator : singleExactSequenceMakerType = (token: tokenType) : internalTokenType => {
+/**
+ * exactObjectSequenceCreator
+ * @param token
+ * @returns {*}
+ */
+const exact = (token) => {
   invariant(token && check.isObject(token), 'Token of plain object type expected for <EXACT>');
 
-  return exactObjectSequenceCreator(token);
+  return tagResultFunction(
+    a => (a !== symRestart) && ( compare(token, a) ? symNext : false),
+    '<SINGLE>:(' + JSON.stringify(token) + ')'
+  );
 };
 
-const exactObjectSequenceCreator : singleExactSequenceMakerType = (token) : internalTokenType => {
-  const result = a => (a !== symRestart) && ( compare(token, a) ? symNext : false);
-  const tokenDescription = '<SINGLE>:(' + JSON.stringify(token) + ')';
-  return tagResultFunction(result, tokenDescription);
+const once = (token) => {
+  const normalizedToken = single(token);
+  return tagResultFunction(
+    setOnce(a => normalizedToken(a)),
+    '<ONCE>:(' + normalizedToken.toString() + ')'
+  );
 };
 
-const timesSequenceCreator : timesSequenceMakerType = (token, times, { strict } = {}) : internalTokenType => {
+const times = (token, times, { strict } = {}) => {
   invariant(token, 'Token expected for <TIMES>');
 
-  const normalizedToken = singleSequenceCreator(token);
+  const normalizedToken = single(token);
   const tokenDescription = '<TIMES>:(' + normalizedToken.toString() + ' x ' + times + ')';
 
   let count = 0;
@@ -198,18 +233,18 @@ const timesSequenceCreator : timesSequenceMakerType = (token, times, { strict } 
   return tagResultFunction(result, tokenDescription);
 };
 
-const timesStrictSequenceCreator : timesStrictSequenceMakerType = (token, times) : internalTokenType => {
+const timesStrict = (token, times) => {
   invariant(token, 'Token expected for <TIMES_STRICT>');
 
   return tagResultFunction(
-    timesSequenceCreator(token, times, { strict: true }),
+    times(token, times, { strict: true }),
     '<TIMES>', '<TIMES_STRICT>');
 };
 
-const allSequenceCreator : multiSequenceMakerType = (tokens, { strict } = {}) : internalTokenType => {
+const all = (tokens, { strict } = {}) => {
   invariant(tokens && tokens.length, 'Tokens expected for <ALL>');
 
-  const normalizedTokens = tokens.map(singleSequenceCreator);
+  const normalizedTokens = tokens.map(single);
   const tokenDescription =  '<ALL>:(' + normalizedTokens.map(t => t.toString()).join() + ')';
 
   let results = normalizedTokens.map(t => false);
@@ -247,10 +282,10 @@ const allSequenceCreator : multiSequenceMakerType = (tokens, { strict } = {}) : 
   return tagResultFunction(result, tokenDescription);
 };
 
-const anySequenceCreator : multiSequenceMakerType = (tokens, { strict } = {}) : internalTokenType => {
+const any = (tokens, { strict } = {}) => {
   invariant(tokens && tokens.length, 'Tokens expected for <ANY>');
 
-  const normalizedTokens = tokens.map(singleSequenceCreator);
+  const normalizedTokens = tokens.map(single);
   const tokenDescription =  '<ANY>:(' + normalizedTokens.map(t => t.toString()).join() + ')';
 
   const result = (a) => {
@@ -271,10 +306,10 @@ const anySequenceCreator : multiSequenceMakerType = (tokens, { strict } = {}) : 
   return tagResultFunction(result, tokenDescription);
 };
 
-const queueSequenceCreator : multiSequenceMakerType = (tokens, { strict } = {}) : internalTokenType => {
+const queue = (tokens, { strict } = {}) => {
   invariant(tokens && tokens.length, 'Tokens expected for <QUEUE>');
 
-  const normalizedTokens = tokens.map(singleSequenceCreator);
+  const normalizedTokens = tokens.map(single);
   const tokenDescription =  '<QUEUE>:(' + normalizedTokens.map(t => t.toString()).join() + ')';
 
   const length = normalizedTokens.length;
@@ -312,118 +347,92 @@ const queueSequenceCreator : multiSequenceMakerType = (tokens, { strict } = {}) 
   return tagResultFunction(result, tokenDescription);
 };
 
-const queueStrictSequenceCreator : multiStrictSequenceMakerType = (tokens) : internalTokenType => {
+const queueStrict = (tokens) => {
   invariant(tokens && tokens.length, 'Tokens expected for <QUEUE_STRICT>');
 
   return tagResultFunction(
-    queueSequenceCreator(tokens, { strict: true }),
+    queue(tokens, { strict: true }),
     '<QUEUE>', '<QUEUE_STRICT>');
 };
 
-const sequenceApi : sequenceMakingApiType = {
-
-  SINGLE: singleSequenceCreator,
-  EXACT: singleExactSequenceCreator,
-  TIMES: timesSequenceCreator,
-  TIMES_STRICT: timesStrictSequenceCreator,
-  ALL: allSequenceCreator,
-  ANY: anySequenceCreator,
+const sequenceApi = {
   /**
    * @deprecated
    */
-  SEQUENCE: queueSequenceCreator,
-  QUEUE: queueSequenceCreator,
+  SINGLE: single,
+  single,
   /**
    * @deprecated
    */
-  SEQUENCE_STRICT: queueStrictSequenceCreator,
-  QUEUE_STRICT: queueStrictSequenceCreator,
+  EXACT: exact,
+  exact,
+  /**
+   * @deprecated
+   */
+  ONCE: once,
+  once,
+  /**
+   * @deprecated
+   */
+  TIMES: times,
+  times,
+  /**
+   * @deprecated
+   */
+  TIMES_STRICT: timesStrict,
+  timesStrict,
+  /**
+   * @deprecated
+   */
+  ALL: all,
+  all,
+  /**
+   * @deprecated
+   */
+  ANY: any,
+  any,
+  /**
+   * @deprecated
+   */
+  SEQUENCE: queue,
+  /**
+   * @deprecated
+   */
+  QUEUE: queue,
+  queue,
+  /**
+   * @deprecated
+   */
+  SEQUENCE_STRICT: queueStrict,
+  QUEUE_STRICT: queueStrict,
+  /**
+   * @deprecated
+   */
+  queueStrict,
 
   PRESENT: symRequired,
   MISSING: symEmpty,
   TRUTHY: symTruthy,
   FALSEY: symFalsey
+
 };
 
 /**
  * @deprecated: use 'sequenceBuilderCb(s => ...) 'callback in 'dispatchWhen'
- * @type {{SINGLE: singleSequenceCreator, TIMES: timesSequenceCreator, TIMES_STRICT: timesStrictSequenceCreator, ALL: allSequenceCreator, ANY: anySequenceCreator, SEQUENCE: queueSequenceCreator, QUEUE: queueSequenceCreator, SEQUENCE_STRICT: queueStrictSequenceCreator, QUEUE_STRICT: queueStrictSequenceCreator}}
+ * @type {{SINGLE: single, TIMES: times, TIMES_STRICT: timesStrict, ALL: all, ANY: any, SEQUENCE: queue, QUEUE: queue, SEQUENCE_STRICT: queueStrict, QUEUE_STRICT: queueStrict}}
  */
-export const SEQ : sequenceMakingApiType = sequenceApi;
+export const SEQ = sequenceApi;
 
-let sequences = [];
+export const dispatchActionWhen = (action, sequenceBuilderCb) => {
+  // let once = (opts && opts.once);
+  const sequenceRaw = sequenceBuilderCb(sequenceApi);
+  const sequence = single(sequenceRaw);
 
-const registerSequence = (fn) => {
+  invariant(sequence && check.isFunction(sequence),
+    'dispatchActionWhen expects *Sequence Builder* to return compiled sequence (a function)');
 
-  sequences.push(fn);
+  return dispatch => register(sequence, action, dispatch);
 
-  // unregister
-  return () => {
-    const idx = sequences.indexOf(fn);
-    if (idx >= 0) {
-      return sequences.splice(idx, 1);
-    }
-  }
-};
-
-export const dispatchActionWhen = (action : FSAOrFSACreatorType, sequenceBuilderCb : sequenceBuilderCallbackType, { once } : dispatchedOptionsType = {}) : thunkedAction => {
-  return dispatch => {
-    const sequenceRaw = sequenceBuilderCb(sequenceApi);
-    let sequence = null;
-    if (check.isArray(sequenceRaw)) {
-      sequence = queueSequenceCreator(sequenceRaw);
-      once = true;
-    } else if (check.isObject(sequenceRaw)) {
-      sequence = singleSequenceCreator(sequenceRaw);
-      once = true;
-    } else {
-      sequence = singleSequenceCreator(sequenceRaw);
-    }
-
-    invariant(sequence && check.isFunction(sequence), 'dispatchWhen expects sequenceBuilderCb to return compiled sequence (function)');
-
-    const seqKey = ('Sequence: ' + sequence.toString() + ' => ' + ((action.type : string) || action.toString()));
-
-    let unregister = registerSequence(a => {
-
-      const result = sequence(a);
-      if (result !== symNext) {
-        return;
-      }
-
-      // console.log(seqKey + ': RESOLVED');
-
-      let unregisterFn = () => {
-        unregister && unregister();
-        unregister = null;
-      };
-
-      if (!once) {
-        sequence(symRestart);
-      }
-
-      if (check.isFunction(action)) {
-        dispatch(action(unregisterFn));
-      } else if (check.isString(action)) {
-        dispatch({
-          type: action,
-          payload: seqKey,
-          meta: {
-            sequence: unregisterFn
-          }
-        })
-      } else {
-        dispatch(action);
-      }
-
-      if (once && unregister) {
-        unregisterFn();
-        unregisterFn = null;
-      }
-
-    })
-
-  }
 };
 
 /**
@@ -433,18 +442,52 @@ export const dispatchActionWhen = (action : FSAOrFSACreatorType, sequenceBuilder
  * @param once
  * @returns {function(*)}
  */
-export const fireOnSequence = (action : FSAOrFSACreatorType, sequence : deprecatedSequenceInputType, {
+export const fireOnSequence = (action , sequence , {
   once
-} : dispatchedOptionsType) : thunkedAction => {
-  return dispatchActionWhen(action, () => check.isArray(sequence) ? queueSequenceCreator(sequence) : singleSequenceCreator(sequence), { once });
+}) => {
+  return dispatchActionWhen(action, single(sequence));
 };
 
-export default (store => next => action => {
+export const clearAll = () => {
+  sequences = [];
+};
+
+/**
+ * Redux middleware to support redux-actions-sequences
+ */
+export default store => next => action => {
   const result = next(action);
 
   if (sequences.length && isFSA(action)) {
-    sequences.forEach(s => s(action));
+    const triggered = [...sequences].filter(s => s(action) === symNext);
+    const unreg = triggered.map(sequence => {
+      const action = getAction(sequence);
+      let isUnregistered = false;
+
+      let unregisterFn = () => {
+        unregister(sequence);
+        isUnregistered = true;
+      };
+
+      if (check.isFunction(action)) {
+        store.dispatch(action(unregisterFn));
+      } else if (check.isString(action)) {
+        const seqKey = ('Sequence: ' + sequence.toString() + ' => ' + ((action.type : string) || action.toString()));
+        store.dispatch({
+          type: action,
+          payload: seqKey,
+          meta: {
+            sequence: unregisterFn
+          }
+        })
+      } else {
+        store.dispatch(action);
+      }
+
+      return isUnregistered ? null : (isOnce(sequence) ? sequence : null) ;
+    }).filter(s => s).map(unregister);
+    // console.log(unreg);
   }
 
   return result;
-} : middlewareType);
+};
