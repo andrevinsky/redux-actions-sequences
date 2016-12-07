@@ -27,24 +27,27 @@ const symFalsey = Symbol('falsey');
 const registry = {};
 let sequences = [];
 
-function register(fn, action) {
-  const id = Math.random().toString().substr(2);
-  fn[symRegistryId] = id;
+function register(fn, effectAction) {
+
+  const unregister = () => {
+    const idx = sequences.indexOf(fn);
+    if (idx >= 0) {
+      return sequences.splice(idx, 1);
+    }
+    delete registry[id];
+  };
 
   sequences.push(fn);
 
+  const id = Math.random().toString().substr(2);
+
+  fn[symRegistryId] = id;
   registry[id] = {
-    unregister: () => {
-      const idx = sequences.indexOf(fn);
-      if (idx >= 0) {
-        return sequences.splice(idx, 1);
-      }
-      delete registry[id];
-    },
-    action
+    unregister,
+    effectAction
   };
 
-  return fn;
+  return unregister;
 }
 
 function unregister(fn) {
@@ -64,7 +67,7 @@ function getAction(fn) {
   const registryId = fn[symRegistryId];
   if (registryId) {
     if (registry[registryId]) {
-      return registry[registryId].action;
+      return registry[registryId].effectAction;
     }
   }
 }
@@ -101,10 +104,11 @@ function setOnce(fn) {
 function tagResultFunction(fn, tokenDescription, replacement) {
   const description = tag(fn);
   if (description) {
-    tag(fn, description.replace(tokenDescription, replacement));
-  } else {
-    tag(fn, tokenDescription);
+    tokenDescription = description.replace(tokenDescription, replacement);
   }
+
+  tag(fn, tokenDescription);
+
   fn.toString = tokenToString;
   return fn;
 }
@@ -134,8 +138,8 @@ function compare(template, obj) {
   }
 }
 
-const single = (token) => {
-  invariant(token, 'Token expected for <SINGLE>');
+const simple = (token) => {
+  invariant(token, 'Token expected for <SIMPLE>');
 
   let tokenStr = null;
 
@@ -165,11 +169,11 @@ const single = (token) => {
     }
   }
 
-  invariant(tokenStr, 'Token invalid type for <SINGLE>');
+  invariant(tokenStr, 'Token invalid type for <SIMPLE>');
 
   return tagResultFunction(
     a => (a !== symRestart) && ( (a.type == tokenStr) ? symNext : false),
-    '<SINGLE>:(' + tokenStr + ')'
+    '<SIMPLE>:(' + tokenStr + ')'
   );
 };
 
@@ -183,22 +187,22 @@ const exact = (token) => {
 
   return tagResultFunction(
     a => (a !== symRestart) && ( compare(token, a) ? symNext : false),
-    '<SINGLE>:(' + JSON.stringify(token) + ')'
+    '<SIMPLE>:(' + JSON.stringify(token) + ')'
   );
 };
 
 const once = (token) => {
-  const normalizedToken = single(token);
+  const normalizedToken = simple(token);
   return tagResultFunction(
     setOnce(a => normalizedToken(a)),
     '<ONCE>:(' + normalizedToken.toString() + ')'
   );
 };
 
-const times = (token, times, { strict } = {}) => {
+const timesFn = (token, times, { strict } = {}) => {
   invariant(token, 'Token expected for <TIMES>');
 
-  const normalizedToken = single(token);
+  const normalizedToken = simple(token);
   const tokenDescription = '<TIMES>:(' + normalizedToken.toString() + ' x ' + times + ')';
 
   let count = 0;
@@ -237,14 +241,14 @@ const timesStrict = (token, times) => {
   invariant(token, 'Token expected for <TIMES_STRICT>');
 
   return tagResultFunction(
-    times(token, times, { strict: true }),
+    timesFn(token, times, { strict: true }),
     '<TIMES>', '<TIMES_STRICT>');
 };
 
 const all = (tokens, { strict } = {}) => {
   invariant(tokens && tokens.length, 'Tokens expected for <ALL>');
 
-  const normalizedTokens = tokens.map(single);
+  const normalizedTokens = tokens.map(simple);
   const tokenDescription =  '<ALL>:(' + normalizedTokens.map(t => t.toString()).join() + ')';
 
   let results = normalizedTokens.map(t => false);
@@ -285,7 +289,7 @@ const all = (tokens, { strict } = {}) => {
 const any = (tokens, { strict } = {}) => {
   invariant(tokens && tokens.length, 'Tokens expected for <ANY>');
 
-  const normalizedTokens = tokens.map(single);
+  const normalizedTokens = tokens.map(simple);
   const tokenDescription =  '<ANY>:(' + normalizedTokens.map(t => t.toString()).join() + ')';
 
   const result = (a) => {
@@ -309,7 +313,7 @@ const any = (tokens, { strict } = {}) => {
 const queue = (tokens, { strict } = {}) => {
   invariant(tokens && tokens.length, 'Tokens expected for <QUEUE>');
 
-  const normalizedTokens = tokens.map(single);
+  const normalizedTokens = tokens.map(simple);
   const tokenDescription =  '<QUEUE>:(' + normalizedTokens.map(t => t.toString()).join() + ')';
 
   const length = normalizedTokens.length;
@@ -356,41 +360,49 @@ const queueStrict = (tokens) => {
 };
 
 const sequenceApi = {
+  simple,
+  exact,
+  once,
+  times: timesFn,
+  timesStrict,
+  all,
+  any,
+  queue,
+  queueStrict,
+
+  present: symRequired,
+  missing: symEmpty,
+  truthy: symTruthy,
+  falsey: symFalsey,
+
   /**
    * @deprecated
    */
-  SINGLE: single,
-  single,
+  SINGLE: simple,
   /**
    * @deprecated
    */
   EXACT: exact,
-  exact,
   /**
    * @deprecated
    */
   ONCE: once,
-  once,
   /**
    * @deprecated
    */
-  TIMES: times,
-  times,
+  TIMES: timesFn,
   /**
    * @deprecated
    */
   TIMES_STRICT: timesStrict,
-  timesStrict,
   /**
    * @deprecated
    */
   ALL: all,
-  all,
   /**
    * @deprecated
    */
   ANY: any,
-  any,
   /**
    * @deprecated
    */
@@ -399,39 +411,50 @@ const sequenceApi = {
    * @deprecated
    */
   QUEUE: queue,
-  queue,
   /**
    * @deprecated
    */
   SEQUENCE_STRICT: queueStrict,
-  QUEUE_STRICT: queueStrict,
   /**
    * @deprecated
    */
-  queueStrict,
+  QUEUE_STRICT: queueStrict,
 
+
+  /**
+   * @deprecated
+   */
   PRESENT: symRequired,
+  /**
+   * @deprecated
+   */
   MISSING: symEmpty,
+  /**
+   * @deprecated
+   */
   TRUTHY: symTruthy,
+  /**
+   * @deprecated
+   */
   FALSEY: symFalsey
 
 };
 
 /**
  * @deprecated: use 'sequenceBuilderCb(s => ...) 'callback in 'dispatchWhen'
- * @type {{SINGLE: single, TIMES: times, TIMES_STRICT: timesStrict, ALL: all, ANY: any, SEQUENCE: queue, QUEUE: queue, SEQUENCE_STRICT: queueStrict, QUEUE_STRICT: queueStrict}}
+ * @type {{SINGLE: simple, TIMES: timesFn, TIMES_STRICT: timesStrict, ALL: all, ANY: any, SEQUENCE: queue, QUEUE: queue, SEQUENCE_STRICT: queueStrict, QUEUE_STRICT: queueStrict}}
  */
 export const SEQ = sequenceApi;
 
 export const dispatchActionWhen = (action, sequenceBuilderCb) => {
-  // let once = (opts && opts.once);
-  const sequenceRaw = sequenceBuilderCb(sequenceApi);
-  const sequence = single(sequenceRaw);
+
+  const sequenceRaw = sequenceBuilderCb({ ...sequenceApi });
+  const sequence = simple(sequenceRaw);
 
   invariant(sequence && check.isFunction(sequence),
     'dispatchActionWhen expects *Sequence Builder* to return compiled sequence (a function)');
 
-  return dispatch => register(sequence, action, dispatch);
+  return dispatch => register(sequence, action);
 
 };
 
@@ -442,10 +465,8 @@ export const dispatchActionWhen = (action, sequenceBuilderCb) => {
  * @param once
  * @returns {function(*)}
  */
-export const fireOnSequence = (action , sequence , {
-  once
-}) => {
-  return dispatchActionWhen(action, single(sequence));
+export const fireOnSequence = (action, sequence) => {
+  return dispatchActionWhen(action, simple(sequence));
 };
 
 export const clearAll = () => {
@@ -460,7 +481,12 @@ export default store => next => action => {
 
   if (sequences.length && isFSA(action)) {
     const triggered = [...sequences].filter(s => s(action) === symNext);
-    const unreg = triggered.map(sequence => {
+    if (!triggered.length) {
+      return;
+    }
+    const dispatched = triggered.map(sequence => {
+      sequence(symRestart);
+
       const action = getAction(sequence);
       let isUnregistered = false;
 
@@ -472,12 +498,12 @@ export default store => next => action => {
       if (check.isFunction(action)) {
         store.dispatch(action(unregisterFn));
       } else if (check.isString(action)) {
-        const seqKey = ('Sequence: ' + sequence.toString() + ' => ' + ((action.type : string) || action.toString()));
+        const seqKey = ('Sequence: ' + sequence.toString() + ' => ' + (action.type || action.toString()));
         store.dispatch({
           type: action,
           payload: seqKey,
           meta: {
-            sequence: unregisterFn
+            unregister: unregisterFn
           }
         })
       } else {
@@ -485,8 +511,15 @@ export default store => next => action => {
       }
 
       return isUnregistered ? null : (isOnce(sequence) ? sequence : null) ;
-    }).filter(s => s).map(unregister);
-    // console.log(unreg);
+    })
+      .filter(s => !!s);
+
+    if (!dispatched.length) {
+      return;
+    }
+
+    dispatched.forEach(unregister);
+
   }
 
   return result;
