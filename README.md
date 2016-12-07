@@ -42,8 +42,9 @@ const store = createStoreWithMiddleware(reducer, initialState);
 
 ```
 
-### Create action sequences with these shorthands:
+### Define action sequences:
 
+#### These lines will be referred to in the examples:
 
 ```js
 
@@ -80,6 +81,10 @@ const actionFour = (unregister) => (dispatch, getState) => {
 
 const actionFive = createAction('ACTION_FIVE');
 
+```
+
+
+```javascript
 
 // Create sequences: 
 
@@ -92,8 +97,8 @@ const actionFive = createAction('ACTION_FIVE');
 export const sequence1 = dispatchActionWhen(reactionOne, ({
       once, queue
     }) => once(queue([
-      appLoading,
-      appLoadingPulse,
+      appLoading, // a string, action's type
+      appLoadingPulse, // several identical actions to wait for
       appLoadingPulse,
       appLoadingPulse,
       appLoadingPulse,
@@ -125,7 +130,8 @@ export const sequence3 = dispatchActionWhen(reactionTwo, ({
   ]));
 
 // will execute until unregister() in thunked action is called
-export const sequence4 = dispatchActionWhen(actionFour, ({ any }) => any([
+export const sequence4 = dispatchActionWhen(actionFour, ({ any }) =>
+  any([
     fetchSets,
     appLoaded
   ]));
@@ -140,6 +146,11 @@ export const sequence5 = dispatchActionWhen(actionFive, ({
     })
   );
 
+```
+
+Defined sequences are not active until they are dispatched:
+
+```javascript
 // Start using them by wrapping in a dispatch() call:
 // Elsewhere:
 
@@ -149,8 +160,12 @@ const unregSequence3 = dispatch(sequence3); // will eventually dispatch reaction
  
 const unregSequence4 = dispatch(sequence4); // will eventually dispatch thunked actionFour
 
-// dispatch actions the sequence depends on: appLoading, appLoadingPulse, fetchSets, appLoaded
 
+```
+
+The result of dispatching is a function to unregister the sequence:
+
+```javascript
 unregSequence2();
 unregSequence3();
 unregSequence4();
