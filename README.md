@@ -71,7 +71,7 @@ const reactionThree = createAction('REACTION_THREE');
 
 // Thinked action (receives unregister() callback to control further
 // occurences)
-const actionFour = (unregister) => (dispatch, getState) => {
+const reactionFour = (unregister) => (dispatch, getState) => {
   const starsAreRight = Math.random() < .5; // or getState()... something
   if (starsAreRight) {
     unregister();
@@ -79,20 +79,54 @@ const actionFour = (unregister) => (dispatch, getState) => {
   }
 };
 
-const actionFive = createAction('ACTION_FIVE');
+const reactionFive = createAction('REACTION_FIVE');
 
 ```
 
+#### How to define a sequence:
 
-```javascript
+To define a sequence of actions you are interested in, you need to call an exported `dispatchActionWhen(reaction, sequenceBuilderFunction)`. The result if a dispatch-able action creator which, when dispatched, will start listening for the FSA actions. 
+
+Once they match the described pattern, the sequence will dispatch the `reaction` action, formulated as a string, a simple FSA-compliant action, or a function that will be consumed by `redux-thunk`.
+
+`sequenceBuilderFunction` is a function which receives a single parameter - sequence builder API. Calling its methods one can construct a variety of quite complex structure of expectations of the actions dispatched around the application. I suggest destructuring the builder API, as shown in the examples below.
+
+#### Sequence Builder API Reference:
+
+```js
+
+const builderAPI = {
+    simple,       
+    exact,        // (action plain-object) object props may be with 
+                  // values 'present','missing', etc.
+    once,         // top-level only
+    times,        // (sequence, count)
+    timesStrict,  // (sequence, count)
+    all,          // array of sequences
+    any,          // array of sequences
+    queue,        // array of sequences
+    queueStrict,  // array of sequences
+    
+    // For exact() object construction
+    present,
+    missing,
+    truthy,
+    falsey
+}
+
+```
+
+#### Examples:
+
+```js
 
 // Create sequences: 
 
 // sequence1 is a thunked action (consumable by redux-thunk middleware)
-// it says that reactionOne will get dispatched each time the `redux-actions-sequences`
+// it says that `reactionOne` will get dispatched each time the `redux-actions-sequences`
 // detects that these actions have been fired in this order (queue),
-// once detected and reactionOne dispatched, this sequence will self-destruct
-// thanks to flag ('once' === true), no further actions that match the 
+// once detected and reactionOne dispatched, this sequence will self-unregister
+// thanks to `once()`, no further actions that match the 
 // sequence will be looked for.
 export const sequence1 = dispatchActionWhen(reactionOne, ({
       once, queue
@@ -108,7 +142,7 @@ export const sequence1 = dispatchActionWhen(reactionOne, ({
     ])));
 
 // previous example is equivalent to this one. 7 identical actions can be
-// repaced by a TIMES(..) sequence, which in turn, may be treated as 
+// repaced by a times(..) sequence, which in turn, may be treated as 
 // another action we expect to happen
 export const sequence2 = dispatchActionWhen(reactionOne, ({
   once, queue, times, simple
@@ -117,7 +151,7 @@ export const sequence2 = dispatchActionWhen(reactionOne, ({
   times(appLoadingPulse, 7)
 ])));
 
-// reactionTwo will only get dispatched when all three of these
+// reactionTwo will only get dispatched when *all* three of these
 // get to be dispatched: appLoading, appLoadingPulse - 7 times, fetchSets
 // irrelevant of their order. Then the sequence3 gets rewound
 export const sequence3 = dispatchActionWhen(reactionTwo, ({
@@ -130,13 +164,14 @@ export const sequence3 = dispatchActionWhen(reactionTwo, ({
   ]));
 
 // will execute until unregister() in thunked action is called
-export const sequence4 = dispatchActionWhen(actionFour, ({ any }) =>
+export const sequence4 = dispatchActionWhen(reactionFour, ({ any }) =>
   any([
     fetchSets,
     appLoaded
   ]));
-  
-export const sequence5 = dispatchActionWhen(actionFive, ({ 
+
+// `exact()` object structure expectation construction
+export const sequence5 = dispatchActionWhen(reactionFive, ({ 
     exact, present, missing, truthy, falsey 
   }) => exact({
       type: 'DATA_FETCH',
@@ -148,27 +183,28 @@ export const sequence5 = dispatchActionWhen(actionFive, ({
 
 ```
 
-Defined sequences are not active until they are dispatched:
+Defined sequences _are not active_ until they are dispatched:
 
-```javascript
+```js
+
 // Start using them by wrapping in a dispatch() call:
 // Elsewhere:
 
-const unregSequence2 = dispatch(sequence2); // effect is the same as dispatch(sequence1) 
+const unregisterSequence2 = dispatch(sequence2); // effect is the same as dispatch(sequence1) 
 
-const unregSequence3 = dispatch(sequence3); // will eventually dispatch reactionTwo, and stop
+const unregisterSequence3 = dispatch(sequence3); // will eventually dispatch reactionTwo, and stop
  
-const unregSequence4 = dispatch(sequence4); // will eventually dispatch thunked actionFour
-
+const unregisterSequence4 = dispatch(sequence4); // will eventually dispatch thunked actionFour
 
 ```
 
 The result of dispatching is a function to unregister the sequence:
 
-```javascript
-unregSequence2();
-unregSequence3();
-unregSequence4();
+```js
+
+unregisterSequence2();
+unregisterSequence3();
+unregisterSequence4();
 
 ```
 
@@ -176,12 +212,14 @@ unregSequence4();
 
 Works along with these packages:
 
-* "redux": "^3.6.0",
-* "redux-thunk": "^2.1.0"
-* "redux-actions": "^0.12.0",
+* `"redux"`
+* `"redux-thunk"`
+* `"redux-actions"`
 
 
 ## See also
+
+- [redux](https://github.com/reactjs/redux) - Predictable state container for JavaScript apps [http://redux.js.org](http://redux.js.org)
 
 - [redux-actions](https://github.com/acdlite/redux-actions) - FSA-compliant action creators
 - [redux-promise](https://github.com/acdlite/redux-promise) - Promise middleware
