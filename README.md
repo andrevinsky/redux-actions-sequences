@@ -85,11 +85,11 @@ const reactionFive = createAction('REACTION_FIVE');
 
 #### How to define a sequence:
 
-To define a sequence of actions you are interested in, you need to call an exported `dispatchActionWhen(reaction, sequenceBuilderFunction)`. The result if a dispatch-able action creator which, when dispatched, will start listening for the FSA actions. 
+To define a sequence of actions you are interested in, you need to call an exported `dispatchActionWhen(reaction, sequenceBuilderFunction)`. The result is a dispatch-able action creator function which, when dispatched, will start listening for the FSA actions. 
 
-Once they match the described pattern, the sequence will dispatch the `reaction` action, formulated as a string, a simple FSA-compliant action, or a function that will be consumed by `redux-thunk`.
+Once they match the described pattern, the sequence will dispatch the `reaction` action, represented as a string, a plain-object FSA-compliant action, or a function that will be consumed by `redux-thunk`.
 
-`sequenceBuilderFunction` is a function which receives a single parameter - sequence builder API. Calling its methods one can construct a variety of quite complex structure of expectations of the actions dispatched around the application. I suggest destructuring the builder API, as shown in the examples below.
+`sequenceBuilderFunction` is a function which accepts a single parameter - sequence builder API lent by the library. Calling its methods one can construct a variety of quite complex structures of expectations of the actions dispatched around the application. I suggest using destructuring assignment of the builder API parameter, as shown in the examples below.
 
 #### Sequence Builder API Reference:
 
@@ -122,7 +122,7 @@ const builderAPI = {
 
 // Create sequences: 
 
-// sequence1 is a thunked action (consumable by redux-thunk middleware)
+// sequence1 is a thunked action (consumable by `redux-thunk` middleware)
 // it says that `reactionOne` will get dispatched each time the `redux-actions-sequences`
 // detects that these actions have been fired in this order (queue),
 // once detected and reactionOne dispatched, this sequence will self-unregister
@@ -227,7 +227,6 @@ Works along with these packages:
 ## Contributing
 
 Please use the [issues page](https://github.com/AndrewRevinsky/redux-actions-sequences/issues) to report a bug or request a feature.
-
 
 ## Stay in Touch
 
