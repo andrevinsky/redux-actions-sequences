@@ -1,10 +1,10 @@
 # Created by .ignore support plugin (hsz.mobi)
-src/
+#src/
 flow-typed/
 npm-debug.log
 .idea/
-.babelrc
+#.babelrc
 .flowconfig
 .npmignore
 memo.md
-yarn.lock
+#yarn.lock

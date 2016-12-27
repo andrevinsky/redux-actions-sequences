@@ -3,6 +3,7 @@
   "version": "1.1.13",
   "description": "Make sequences of actions trigger a new action",
   "main": "lib/index.js",
+  "jsnext:main": "src/index.js",
   "scripts": {
     "test": "mocha --compilers js:babel-register src/**/*-test.js",
     "test:watch": "npm run test -- --watch src/**/*-test.js",
@@ -27,12 +28,12 @@
   "homepage": "https://github.com/AndrewRevinsky/redux-actions-sequences",
   "license": "MIT",
   "dependencies": {
-    "babel-preset-stage-0": "^6.16.0",
     "flux-standard-action": "^0.6.1",
     "invariant": "^2.2.1",
     "istypes": "^1.0.3"
   },
   "devDependencies": {
+    "babel-preset-stage-0": "^6.16.0",
     "babel-cli": "^6.16.0",
     "babel-core": "^6.17.0",
     "babel-plugin-transform-flow-strip-types": "^6.14.0",
