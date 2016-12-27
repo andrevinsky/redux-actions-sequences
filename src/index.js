@@ -10,7 +10,7 @@
 import { isFSA } from 'flux-standard-action';
 import invariant from 'invariant';
 
-import check from './type';
+import { check } from 'istypes';
 
 const symTag = Symbol('SEQ');
 const symRegistryId = Symbol('registry');

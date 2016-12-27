@@ -29,7 +29,8 @@
   "dependencies": {
     "babel-preset-stage-0": "^6.16.0",
     "flux-standard-action": "^0.6.1",
-    "invariant": "^2.2.1"
+    "invariant": "^2.2.1",
+    "istypes": "^1.0.3"
   },
   "devDependencies": {
     "babel-cli": "^6.16.0",

@@ -69,7 +69,7 @@ const reactionOne = 'REACTION_ONE';
 const reactionTwo = { type: 'REACTION_TWO' };
 const reactionThree = createAction('REACTION_THREE');
 
-// Thinked action (receives unregister() callback to control further
+// Thunked action (receives unregister() callback to control further
 // occurences)
 const reactionFour = (unregister) => (dispatch, getState) => {
   const starsAreRight = Math.random() < .5; // or getState()... something
