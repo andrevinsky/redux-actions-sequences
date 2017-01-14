@@ -26,8 +26,9 @@ const symFalsey = Symbol('falsey');
 
 const registry = {};
 let sequences = [];
+const actionsCache = new WeakMap();
 
-function register(fn, effectAction) {
+function register(fn, reaction) {
 
   const unregister = () => {
     const idx = sequences.indexOf(fn);
@@ -38,13 +39,14 @@ function register(fn, effectAction) {
   };
 
   sequences.push(fn);
+  actionsCache.set(fn, []);
 
   const id = Math.random().toString().substr(2);
 
   fn[symRegistryId] = id;
   registry[id] = {
     unregister,
-    effectAction
+    reaction
   };
 
   return unregister;
@@ -55,19 +57,18 @@ function unregister(fn) {
   if (registryId) {
     if (registry[registryId]) {
       registry[registryId].unregister();
-    } else {
-      delete registry[registryId];
     }
+    delete registry[registryId];
     delete fn[symRegistryId];
   }
   return fn;
 }
 
-function getAction(fn) {
+function getReaction(fn) {
   const registryId = fn[symRegistryId];
   if (registryId) {
     if (registry[registryId]) {
-      return registry[registryId].effectAction;
+      return registry[registryId].reaction;
     }
   }
 }
@@ -75,6 +76,7 @@ function getAction(fn) {
 function isTagged(input) {
   return !!input[symTag];
 }
+
 function tag(input, description) {
   if (check.isUndefined(description)) {
     return input[symTag];
@@ -268,7 +270,7 @@ const all = (tokens, { strict } = {}) => {
         return symNext;
       }
       return results[k];
-    }, results);
+    });
 
     const nextResultsReadyCount = nextResults.filter(i => i === symNext).length;
     if (nextResultsReadyCount === length) {
@@ -346,7 +348,7 @@ const queue = (tokens, { strict } = {}) => {
       restart(normalizedTokens);
       return false;
     }
-    return true;
+    return count !== 0;
   };
   return tagResultFunction(result, tokenDescription);
 };
@@ -441,7 +443,7 @@ const sequenceApi = {
 };
 
 /**
- * @deprecated: use 'sequenceBuilderCb(s => ...) 'callback in 'dispatchWhen'
+ * @deprecated: use 'sequenceBuilderCb(s => ...) 'callback in 'dispatchActionWhen'
  * @type {{SINGLE: simple, TIMES: timesFn, TIMES_STRICT: timesStrict, ALL: all, ANY: any, SEQUENCE: queue, QUEUE: queue, SEQUENCE_STRICT: queueStrict, QUEUE_STRICT: queueStrict}}
  */
 export const SEQ = sequenceApi;
@@ -459,7 +461,7 @@ export const dispatchActionWhen = (action, sequenceBuilderCb) => {
 };
 
 /**
- * @deprecated: use dispatchWhen
+ * @deprecated: use dispatchActionWhen
  * @param action
  * @param sequence
  * @param once
@@ -470,6 +472,7 @@ export const fireOnSequence = (action, sequence) => {
 };
 
 export const clearAll = () => {
+  [...sequences].forEach(unregister);
   sequences = [];
 };
 
@@ -480,37 +483,68 @@ export default store => next => action => {
   const result = next(action);
 
   if (sequences.length && isFSA(action)) {
-    const triggered = [...sequences].filter(s => s(action) === symNext);
-    if (!triggered.length) {
-      return;
-    }
-    const dispatched = triggered.map(sequence => {
+
+    const dispatched = [...sequences].map(sequence => {
+      const seqMatch = sequence(action);
+      if (seqMatch === false) {
+        actionsCache.set(sequence, []);
+        return;
+      }
+      const actions = actionsCache.get(sequence);
+      actions.push(action);
+      if (seqMatch === true) {
+        actionsCache.set(sequence, actions);
+        return;
+      }
+      if (seqMatch !== symNext) {
+        return;
+      }
+      actionsCache.set(sequence, []);
+
       sequence(symRestart);
 
-      const action = getAction(sequence);
-      let isUnregistered = false;
+      const reaction = getReaction(sequence);
 
+      let isUnregistered = false;
       let unregisterFn = () => {
         unregister(sequence);
         isUnregistered = true;
       };
 
-      if (check.isFunction(action)) {
-        store.dispatch(action(unregisterFn));
-      } else if (check.isString(action)) {
-        const seqKey = ('Sequence: ' + sequence.toString() + ' => ' + (action.type || action.toString()));
+      if (check.isFunction(reaction)) {
+        store.dispatch(reaction(unregisterFn, actions));
+      } else if (check.isString(reaction)) {
+        // const seqKey = ('Sequence: ' + sequence.toString() + ' => ' + (reaction.type || reaction.toString()));
         store.dispatch({
-          type: action,
-          payload: seqKey,
+          type: reaction,
+          payload: {
+            actions
+          },
           meta: {
             unregister: unregisterFn
           }
         })
+      } else if (check.isObject(reaction)) {
+        const hasPayload = !!reaction.payload;
+        const payload = hasPayload ? {
+          ...reaction.payload,
+          actions
+        } : { actions };
+
+        store.dispatch({
+          ...reaction,
+          payload
+        });
       } else {
-        store.dispatch(action);
+        store.dispatch(reaction);
       }
 
-      return isUnregistered ? null : (isOnce(sequence) ? sequence : null) ;
+      return isUnregistered ?
+        null :
+        (isOnce(sequence) ?
+          sequence :
+          null);
+
     })
       .filter(s => !!s);
 

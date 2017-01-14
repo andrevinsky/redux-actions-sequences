@@ -5,11 +5,23 @@ import { expect } from 'chai';
 import configureMockStore from 'redux-mock-store';
 import thunk from 'redux-thunk';
 import { createAction } from 'redux-actions';
+import check from 'istypes';
 
 import middlewareToTest, { dispatchActionWhen, clearAll } from '../index';
 
 const middlewares = [ thunk, middlewareToTest ];
 const mockStore = configureMockStore(middlewares);
+
+const disregardPayloadActions = ({ payload, ...rest}) => {
+  if (!payload || ((Object.keys(payload).length === 1) && (payload.actions))) {
+    return rest;
+  }
+  const { actions, ...rest2 } = payload;
+  return {
+    payload: rest2,
+    ...rest
+  };
+};
 
 describe('redux-actions-sequences:', () => {
 
@@ -53,7 +65,7 @@ describe('redux-actions-sequences:', () => {
       store.dispatch(action);
 
       actions = store.getActions();
-      expect(actions).to.deep.equal([
+      expect(actions.map(disregardPayloadActions)).to.deep.equal([
         action,
         reaction
       ]);
@@ -164,7 +176,7 @@ describe('redux-actions-sequences:', () => {
     const action = { type: 'action' };
     const reaction = { type: 'sequence_met' };
 
-   const resources = [
+    const resources = [
       'Ad-hoc, string for action type',
       'Ad-hoc, plain object',
       'Ad-hoc, FSA-action creator',
@@ -208,7 +220,7 @@ describe('redux-actions-sequences:', () => {
         store.dispatch(action); // 3
 
         actions = store.getActions();
-        expect(actions).to.deep.equal([
+        expect(actions.map(disregardPayloadActions)).to.deep.equal([
           action,
           reaction
         ]);
@@ -220,7 +232,7 @@ describe('redux-actions-sequences:', () => {
 
   });
 
-  describe('Sequence can be build based on these action definitions. ', () => {
+  describe('Sequence can be built based on these action definitions. ', () => {
 
     const action = { type: 'action' };
 
@@ -259,7 +271,7 @@ describe('redux-actions-sequences:', () => {
         store.dispatch(action); // 3
 
         actions = store.getActions();
-        expect(actions).to.deep.equal([
+        expect(actions.map(disregardPayloadActions)).to.deep.equal([
           { type: 'action' },
           { type: 'sequence_met' }
         ]);
@@ -272,13 +284,13 @@ describe('redux-actions-sequences:', () => {
 
   });
 
-  describe('Repetitions', () => {
+  describe('Repetitions/Once', () => {
     const action = { type: 'action' };
     const reaction = { type: 'sequence_met' };
 
     [
       {
-        description: 'Repeated',
+        description: 'Repeated (default)',
         sequence: dispatchActionWhen(reaction, ({ simple }) => simple(action)),
         steps: [
           {
@@ -325,13 +337,216 @@ describe('redux-actions-sequences:', () => {
 
         steps.forEach(({ fire, expecting }) => {
           store.dispatch(fire); // 3
-          expect(actions()).to.deep.equal(expecting);
+          expect(actions().map(disregardPayloadActions)).to.deep.equal(expecting);
         });
 
         unregister();
 
       })
     });
+  });
+
+  describe('Reactions contain the actions that triggered it as a payload', () => {
+    const ACTION_ONE_TYPE = 'action_one';
+    const ACTION_TWO_TYPE = 'action_two';
+    const REACTION_TYPE = 'sequence_met';
+
+    const actionOne = { type: ACTION_ONE_TYPE };
+    const actionOneTs = (ts) => ({ ...actionOne, meta: { ts } });
+    const actionTwo = { type: ACTION_TWO_TYPE };
+
+    const stringReaction = REACTION_TYPE;
+    const objectReaction = { type: REACTION_TYPE };
+    const actionCreatorReaction = createAction(REACTION_TYPE,
+      (unregister, actions) => ({ actions }),
+      (unregister, actions) => ({ unregister })
+    );
+
+    const thunkedAction = (unregister, actions) => dispatch => dispatch({
+      type: REACTION_TYPE,
+      payload: {
+        actions
+      },
+      meta: {
+        unregister
+      }
+    });
+
+    const expectedReaction = (actions) => ({
+      type: REACTION_TYPE,
+      payload: {
+        actions
+      }
+    });
+
+    [
+      {
+        description: 'a string-based reaction to a simple action (different timestamps ensure different actions)',
+        sequence: dispatchActionWhen(stringReaction, ({ simple }) => simple(actionOne)),
+        steps: [
+          {
+            fire: actionOneTs(1),
+            expecting: [
+              actionOneTs(1), expectedReaction([ actionOneTs(1) ])
+            ]
+          },
+          {
+            fire: actionOneTs(2),
+            expecting: [
+              actionOneTs(1), expectedReaction([ actionOneTs(1) ]),
+              actionOneTs(2), expectedReaction([ actionOneTs(2) ])
+            ]
+          }
+        ]
+      },
+      {
+        description: 'an object-based reaction to a simple action (different timestamps ensure different actions)',
+        sequence: dispatchActionWhen(objectReaction, ({ simple }) => simple(actionOne)),
+        steps: [
+          {
+            fire: actionOneTs(11),
+            expecting: [
+              actionOneTs(11), expectedReaction([ actionOneTs(11) ])
+            ]
+          },
+          {
+            fire: actionOneTs(12),
+            expecting: [
+              actionOneTs(11), expectedReaction([ actionOneTs(11) ]),
+              actionOneTs(12), expectedReaction([ actionOneTs(12) ])
+            ]
+          }
+        ]
+      },
+      {
+        description: 'an actionCreator-based reaction to a simple action (different timestamps ensure different actions)',
+        sequence: dispatchActionWhen(actionCreatorReaction, ({ simple }) => simple(actionOne)),
+        steps: [
+          {
+            fire: actionOneTs(111),
+            expecting: [
+              actionOneTs(111), expectedReaction([ actionOneTs(111) ])
+            ]
+          },
+          {
+            fire: actionOneTs(112),
+            expecting: [
+              actionOneTs(111), expectedReaction([ actionOneTs(111) ]),
+              actionOneTs(112), expectedReaction([ actionOneTs(112) ])
+            ]
+          }
+        ]
+      },
+      {
+        description: 'a thunked action-based reaction to a simple action (different timestamps ensure different actions)',
+        sequence: dispatchActionWhen(thunkedAction, ({ simple }) => simple(actionOne)),
+        steps: [
+          {
+            fire: actionOneTs(1111),
+            expecting: [
+              actionOneTs(1111), expectedReaction([ actionOneTs(1111) ])
+            ]
+          },
+          {
+            fire: actionOneTs(1112),
+            expecting: [
+              actionOneTs(1111), expectedReaction([ actionOneTs(1111) ]),
+              actionOneTs(1112), expectedReaction([ actionOneTs(1112) ])
+            ]
+          }
+        ]
+      },
+      {
+        description: 'a string action-based reaction to a queue of two simple actions',
+        sequence: dispatchActionWhen(stringReaction, ({ queue }) => queue([ actionTwo, actionOne ])),
+        steps: [
+          {
+            fire: actionOne,
+            expecting: [
+              actionOne
+            ]
+          },
+          {
+            fire: actionTwo,
+            expecting: [
+              actionOne,
+              actionTwo
+            ]
+          },
+          {
+            fire: actionOne,
+            expecting: [
+              actionOne,
+              actionTwo,
+              actionOne,
+              expectedReaction([
+                actionTwo,
+                actionOne ])
+            ]
+          }
+        ]
+      }
+    ].forEach(({ description, sequence, steps }) => {
+      it('Produces  ' + description, () => {
+        clearAll();
+
+        const store = mockStore({});
+        const actions = () => store.getActions();
+
+        const unregister = store.dispatch(sequence); // 2
+        expect(actions()).to.deep.equal([]);
+
+        steps.forEach(({ fire, expecting }, idx) => {
+
+          store.dispatch(fire); // 3
+
+          // console.info('actions', JSON.stringify(actions()));
+          // console.info('expecting', JSON.stringify(expecting));
+          expect(actions().map(({ type, payload, meta }) => {
+
+            if (!payload && !meta) {
+              return { type };
+            }
+
+            let skipMeta = false;
+
+            if (meta) {
+              if (meta.unregister) {
+                expect(check.isFunction(meta.unregister)).to.be.true;
+              }
+              delete meta.unregister;
+              skipMeta = !(Object.keys(meta).length);
+
+              if (!payload) {
+                return skipMeta ? { type } : { type, meta };
+              }
+            }
+
+            const { actions } = payload;
+            if (skipMeta || !meta) {
+              return {
+                type,
+                payload: {
+                  actions
+                }
+              }
+            }
+
+            return {
+              type,
+              meta,
+              payload: {
+                actions
+              }
+            }
+
+          })).to.deep.equal(expecting);
+        });
+
+        unregister();
+      });
+    });
+
   });
 
   describe('API', () => {
@@ -685,7 +900,7 @@ describe('redux-actions-sequences:', () => {
 
         steps.forEach(({ fire, expecting }) => {
           store.dispatch(fire); // 3
-          expect(actions()).to.deep.equal(expecting);
+          expect(actions().map(disregardPayloadActions)).to.deep.equal(expecting);
         });
 
         unregister();
