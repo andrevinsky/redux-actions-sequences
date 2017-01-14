@@ -87,9 +87,18 @@ const reactionFive = createAction('REACTION_FIVE');
 
 To define a sequence of actions you are interested in, you need to call an exported `dispatchActionWhen(reaction, sequenceBuilderFunction)`. The result is a dispatch-able action creator function which, when dispatched, will start listening for the FSA actions. 
 
-Once they match the described pattern, the sequence will dispatch the `reaction` action, represented as a string, a plain-object FSA-compliant action, or a function that will be consumed by `redux-thunk`.
+Once they match the described pattern, the sequence will dispatch the `reaction` action, represented as a string, a plain-object FSA-compliant action, or a function  (action creator or async action).
 
 `sequenceBuilderFunction` is a function which accepts a single parameter - sequence builder API lent by the library. Calling its methods one can construct a variety of quite complex structures of expectations of the actions dispatched around the application. I suggest using destructuring assignment of the builder API parameter, as shown in the examples below.
+
+#### Reactions:
+
+Once triggered, a reaction object has standard properties aside from `type`: `payload` and `meta`.
+
+`payload` has a property `actions` which contains the actions that triggered it,
+`meta` has a property `unregister` which is a handle to unregister the sequence definition.
+
+A function-based reaction is called with (`unregisterFn`, `actions`).
 
 #### Sequence Builder API Reference:
 
@@ -207,6 +216,8 @@ unregisterSequence3();
 unregisterSequence4();
 
 ```
+
+Note, sequences are funstions so in order to dispatch them without errors you will need to have `redux-thunk` set up as a middleware.
 
 ### Dependencies:
 
