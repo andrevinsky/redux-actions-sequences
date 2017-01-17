@@ -1,7 +1,7 @@
 # redux-actions-sequences
 
 [![NPM](https://nodei.co/npm/redux-actions-sequences.png?downloads=true&stars=true)](https://nodei.co/npm/redux-actions-sequences/)
-[![Build Status](https://travis-ci.org/AndrewRevinsky/redux-actions-sequences.svg?branch=master)](https://travis-ci.org/AndrewRevinsky/redux-actions-sequences)
+[![Build Status](https://travis-ci.org/AndrewRevinsky/redux-actions-sequences.svg?branch=master)](https://travis-ci.org/AndrewRevinsky/redux-actions-sequences)[![Dependencies](https://david-dm.org/AndrewRevinsky/redux-actions-sequences.svg?branch=master)](https://david-dm.org/AndrewRevinsky/redux-actions-sequences)
 
 `redux-actions-sequences` is a library that that makes defined sequences of redux actions trigger a new action. Sequence can be comprised of a single action (`simple`, `exact`), a series of the same action repeated n times (`times`, `timesStrict`), an order-dependent series of actions (`queue`, `queueStrict`), order-indenendent (`all`), just one of from the given list (`any`), or their superposition. 
 
