@@ -289,10 +289,10 @@ const all = (tokens, { strict } = {}) => {
 };
 
 const any = (tokens, { strict } = {}) => {
-  invariant(tokens && tokens.length, 'Tokens expected for <ANY>');
+  invariant(tokens && tokens.length, `Tokens expected for <ANY>, instead got: ${ tokens }`);
 
   const normalizedTokens = tokens.map(simple);
-  const tokenDescription =  '<ANY>:(' + normalizedTokens.map(t => t.toString()).join() + ')';
+  const tokenDescription =  `<ANY>:(${ normalizedTokens.map(t => t.toString()).join() })`;
 
   const result = (a) => {
     if (a === symRestart) {
@@ -358,7 +358,8 @@ const queueStrict = (tokens) => {
 
   return tagResultFunction(
     queue(tokens, { strict: true }),
-    '<QUEUE>', '<QUEUE_STRICT>');
+    '<QUEUE>',
+    '<QUEUE_STRICT>');
 };
 
 const sequenceApi = {
@@ -376,6 +377,7 @@ const sequenceApi = {
   missing: symEmpty,
   truthy: symTruthy,
   falsey: symFalsey,
+  falsy: symFalsey,
 
   /**
    * @deprecated
@@ -484,7 +486,8 @@ export default store => next => action => {
 
   if (sequences.length && isFSA(action)) {
 
-    const dispatched = [...sequences].map(sequence => {
+    // enumerate the copy so that unregister did not affet it
+    [...sequences].forEach(sequence => {
       const seqMatch = sequence(action);
       if (seqMatch === false) {
         actionsCache.set(sequence, []);
@@ -512,12 +515,17 @@ export default store => next => action => {
       };
 
       if (check.isFunction(reaction)) {
-        store.dispatch(reaction(unregisterFn, actions));
+        store.dispatch(reaction({
+          unregister: unregisterFn,
+          action,
+          actions
+        }));
       } else if (check.isString(reaction)) {
         // const seqKey = ('Sequence: ' + sequence.toString() + ' => ' + (reaction.type || reaction.toString()));
         store.dispatch({
           type: reaction,
           payload: {
+            action,
             actions
           },
           meta: {
@@ -527,9 +535,10 @@ export default store => next => action => {
       } else if (check.isObject(reaction)) {
         const hasPayload = !!reaction.payload;
         const payload = hasPayload ? {
-          ...reaction.payload,
-          actions
-        } : { actions };
+            ...reaction.payload,
+            action,
+            actions
+          } : { action, actions };
 
         store.dispatch({
           ...reaction,
@@ -539,20 +548,13 @@ export default store => next => action => {
         store.dispatch(reaction);
       }
 
-      return isUnregistered ?
-        null :
-        (isOnce(sequence) ?
-          sequence :
-          null);
-
-    })
-      .filter(s => !!s);
-
-    if (!dispatched.length) {
-      return;
-    }
-
-    dispatched.forEach(unregister);
+      if (isUnregistered) {
+        return;
+      }
+      if (isOnce(sequence)) {
+        unregisterFn();
+      }
+    });
 
   }
 

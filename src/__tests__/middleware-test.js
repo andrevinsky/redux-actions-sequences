@@ -13,10 +13,16 @@ const middlewares = [ thunk, middlewareToTest ];
 const mockStore = configureMockStore(middlewares);
 
 const disregardPayloadActions = ({ payload, ...rest}) => {
-  if (!payload || ((Object.keys(payload).length === 1) && (payload.actions))) {
+  if (!payload) {
     return rest;
   }
-  const { actions, ...rest2 } = payload;
+
+  const { action, actions, ...rest2 } = payload;
+
+  if (Object.keys(rest2).length === 0) {
+    return rest;
+  }
+
   return {
     payload: rest2,
     ...rest
@@ -125,8 +131,8 @@ describe('redux-actions-sequences:', () => {
 
     });
 
-    it('..or if the sequence action is an function, the unregister() function will be passed as a first parameter', () => {
-      const thunked = (unregister) => dispatch => {
+    it('..or if the sequence action is an function, the unregister() function will be passed as a prop inside a first parameter', () => {
+      const thunked = ({ unregister }) => dispatch => {
         dispatch(reaction);
         unregister();
       };
@@ -358,11 +364,11 @@ describe('redux-actions-sequences:', () => {
     const stringReaction = REACTION_TYPE;
     const objectReaction = { type: REACTION_TYPE };
     const actionCreatorReaction = createAction(REACTION_TYPE,
-      (unregister, actions) => ({ actions }),
-      (unregister, actions) => ({ unregister })
+      ({ unregister, actions }) => ({ actions }),
+      ({ unregister, actions }) => ({ unregister })
     );
 
-    const thunkedAction = (unregister, actions) => dispatch => dispatch({
+    const thunkedAction = ({ unregister, actions }) => dispatch => dispatch({
       type: REACTION_TYPE,
       payload: {
         actions
